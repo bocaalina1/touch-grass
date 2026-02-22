@@ -5,7 +5,7 @@
 
 ## What it does
 
-Lockout runs as a background service and monitors which app you're using. Once you've hit your daily time limit for a tracked app, it throws a wall in your face and traps the back button. The only way out is the home button. Come back tomorrow.
+Touch Grass runs as a background service and monitors which app you're using. Once you've hit your daily time limit for a tracked app, it throws a wall in your face and traps the back button. The only way out is the home button. Come back tomorrow.
 
 It resets at midnight. No exceptions. No "just five more minutes."
 
