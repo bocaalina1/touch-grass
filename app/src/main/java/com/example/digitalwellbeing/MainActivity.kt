@@ -25,7 +25,8 @@ class MainActivity : AppCompatActivity() {
         "com.whatsapp"          to 200L,
         "com.instagram.android" to 30L,
         "com.naver.linewebtoon" to 25L,
-        "com.youtube.android"   to 15L
+        "com.youtube.android"   to 15L,
+        "com.android.settings" to 1L
     )
 
     // -------------------------------------------------------------------------
@@ -104,7 +105,7 @@ class MainActivity : AppCompatActivity() {
                 val minutes = timeMs / 1_000 / 60
                 val appName = getAppLabel(pm, pkg)
                 val limitText = appLimits[pkg]?.let { " / ${it}m limit" } ?: ""
-                sb.appendLine("$appName — ${minutes}m$limitText")
+                sb.appendLine("$pkg — ${minutes}m$limitText")
             }
 
         findViewById<TextView>(R.id.tvStats).text =
