@@ -13,7 +13,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.enableEdgeToEdge
 import java.util.Calendar
-
+import android.widget.Button
 /**
  * Entry point of the app. Requests the necessary permissions, starts the
  * [BlockerService], and displays today's per-app usage statistics.
@@ -33,28 +33,52 @@ class MainActivity : AppCompatActivity() {
     // Lifecycle
     // -------------------------------------------------------------------------
 
+    override fun onResume() {
+        super.onResume()
+        if (hasUsageStatsPermission()) {
+            startService(Intent(this, BlockerService::class.java))  // move here
+            displayUsageStats()
+        } else {
+            showPermissionPrompt()
+            // only open settings if we haven't already
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        requestRequiredPermissions()
-        startService(Intent(this, BlockerService::class.java))
-    }
+        // Only request overlay + notification here, NOT usage stats
+        requestOverlayAndNotificationPermissions()
 
-    override fun onResume() {
-        super.onResume()
-        if (hasUsageStatsPermission()) {
-            displayUsageStats()
-        } else {
-            showPermissionPrompt()
+        findViewById<Button>(R.id.btnStats).setOnClickListener {
+            startActivity(Intent(this, StatsActivity::class.java))
         }
     }
-
     // -------------------------------------------------------------------------
     // Permissions
     // -------------------------------------------------------------------------
-
+    private fun requestOverlayAndNotificationPermissions() {
+        if (!Settings.canDrawOverlays(this)) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_NOTIFICATION_PERMISSION
+            )
+        }
+    }
     private fun requestRequiredPermissions() {
         if (!hasUsageStatsPermission()) {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
@@ -134,15 +158,21 @@ class MainActivity : AppCompatActivity() {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        return usm.queryUsageStats(
+        val stats = usm.queryUsageStats(
             UsageStatsManager.INTERVAL_BEST,
             startOfDay,
             System.currentTimeMillis()
         )
-            .filter { it.totalTimeInForeground > 0 }
-            .associate { it.packageName to it.totalTimeInForeground }
-    }
 
+        val totals = mutableMapOf<String, Long>()
+        stats.forEach { stat ->
+            if (stat.totalTimeInForeground > 0) {
+                totals[stat.packageName] = (totals[stat.packageName] ?: 0L) + stat.totalTimeInForeground
+            }
+        }
+
+        return totals
+    }
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

@@ -41,11 +41,11 @@ class BlockerActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(ContextCompat.getColor(context, android.R.color.white))
+            setBackgroundColor(0xFFE8F5E9.toInt()) // light green background
             setPadding(64, 64, 64, 64)
 
             addView(TextView(context).apply {
-                text = "⏱"
+                text = "🌿"
                 textSize = 64f
                 gravity = Gravity.CENTER
             })
@@ -54,18 +54,18 @@ class BlockerActivity : AppCompatActivity() {
                 text = "Time's up for $appName"
                 textSize = 26f
                 gravity = Gravity.CENTER
+                setTextColor(0xFF2E7D32.toInt()) // dark green
                 setPadding(0, 48, 0, 24)
             })
 
             addView(TextView(context).apply {
-                text = "You've reached your daily limit.\nCome back tomorrow — your future self will thank you."
+                text = "You've reached your daily limit.\nGo touch some grass — your future self will thank you. 🌱"
                 textSize = 16f
                 gravity = Gravity.CENTER
-                setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
+                setTextColor(0xFF388E3C.toInt()) // medium green
             })
         }
     }
-
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
