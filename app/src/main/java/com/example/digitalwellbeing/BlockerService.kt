@@ -12,12 +12,12 @@ import java.util.Calendar
 
 class BlockerService : Service() {
 
+    private val db by lazy { AppDatabase.get(this) }
     private val appLimits = mapOf(
         "com.whatsapp"          to 200L,
         "com.instagram.android" to 30L,
         "com.naver.linewebtoon" to 25L,
-        "com.youtube.android"   to 15L,
-        "com.android.settings"  to 1L
+        "com.youtube.android"   to 15L
     )
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -27,6 +27,7 @@ class BlockerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, buildNotification())
         resetDailyUsageIfNewDay()
+        sendUsageFromSystemIfEmpty()
 
         serviceScope.launch {
             while (isActive) {
@@ -50,13 +51,11 @@ class BlockerService : Service() {
         val detectedApp = getForegroundApp()
 
         if (detectedApp != currentForegroundApp) {
-            // Save and reset the outgoing session
             persistCurrentSession()
-            sessionStartTime = 0L  // reset so elapsed doesn't bleed into new session
+            sessionStartTime = 0L
             currentForegroundApp = detectedApp
             sessionStartTime = System.currentTimeMillis()
 
-            // Block immediately if already over limit on switch/restart
             if (detectedApp != null) {
                 val savedSeconds = getSavedUsageSeconds(detectedApp)
                 val limitSeconds = (appLimits[detectedApp] ?: 0L) * 60
@@ -94,7 +93,13 @@ class BlockerService : Service() {
         val elapsed = elapsedSessionSeconds()
         if (elapsed > 0) {
             addUsageSeconds(app, elapsed)
-            sessionStartTime = System.currentTimeMillis() // reset so we don't double count
+            serviceScope.launch {
+                db.sessionDao().insert(AppSession(
+                    packageName = app,
+                    durationSeconds = elapsed
+                ))
+            }
+            sessionStartTime = System.currentTimeMillis()
         }
     }
 
@@ -121,7 +126,64 @@ class BlockerService : Service() {
                 .clear()
                 .putLong(KEY_LAST_RESET, System.currentTimeMillis())
                 .apply()
+
+            // Re-seed immediately after clearing, since it's a new day anyway
+            seedFromSystem()
         }
+    }
+
+    private fun sendUsageFromSystemIfEmpty() {
+        val alreadySeeded = usagePrefs().getBoolean("seeded", false)
+        if (alreadySeeded) return
+        seedFromSystem()
+    }
+
+    private fun seedFromSystem() {
+        val prefs = usagePrefs()
+
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val todayMidnight = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        val stats = usm.queryUsageStats(
+            UsageStatsManager.INTERVAL_BEST,
+            todayMidnight,
+            System.currentTimeMillis()
+        )
+
+        android.util.Log.d(TAG, "Seeding from system, stats count: ${stats.size}")
+
+        // Aggregate duplicates into a map before saving
+        val totals = mutableMapOf<String, Long>()
+
+        stats.filter { appLimits.containsKey(it.packageName) }
+            .forEach { stat ->
+                val seconds = stat.totalTimeInForeground / 1000
+                if (seconds > 0) {
+                    totals[stat.packageName] = (totals[stat.packageName] ?: 0L) + seconds
+                }
+            }
+
+        // Save the summed totals to SharedPreferences
+        val editor = prefs.edit()
+        totals.forEach { (pkg, seconds) ->
+            editor.putLong(pkg, seconds)
+            serviceScope.launch {
+                db.sessionDao().insert(AppSession(
+                    packageName = pkg,
+                    durationSeconds = seconds,
+                    timestamp = System.currentTimeMillis()
+                ))
+            }
+            android.util.Log.d(TAG, "Seeded $pkg: ${seconds / 60}m ${seconds % 60}s")
+        }
+
+        editor.putBoolean("seeded", true)
+        editor.apply()
     }
 
     private fun usagePrefs(): SharedPreferences =
@@ -147,12 +209,13 @@ class BlockerService : Service() {
     private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "App Blocker", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_ID, "Touch Grass", NotificationManager.IMPORTANCE_LOW)
         )
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Digital Wellbeing Active")
-            .setContentText("Monitoring your daily app limits")
+            .setContentTitle("Touch Grass")
+            .setContentText("Go outside 🌿")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setColorized(true)
             .build()
     }
 

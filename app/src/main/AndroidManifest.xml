@@ -32,10 +32,14 @@
         <service android:name=".BlockerService"
             android:foregroundServiceType="specialUse"/>
 
-        <activity android:name=".BlockerActivity"
-            android:excludeFromRecents="true"
-            android:showOnLockScreen="false"/>
+        <activity android:name=".StatsActivity" />
 
+        <activity
+            android:name=".BlockerActivity"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:excludeFromRecents="true">
+        </activity>
     </application>
 
 </manifest>

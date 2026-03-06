@@ -1,32 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="4dp">
+    android:background="#E8F5E9"
+    android:paddingHorizontal="24dp"
+    android:paddingTop="64dp"
+    android:paddingBottom="64dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Digital Wellbeing"
-        android:textSize="24sp"
+        android:text="Touch Grass 🌿"
+        android:textSize="28sp"
         android:textStyle="bold"
-        android:padding="16dp"
-        android:background="#6200EE"
-        android:textColor="#FFFFFF"/>
+        android:textColor="#2E7D32"
+        android:layout_marginBottom="32dp" />
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:padding="16dp">
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:overScrollMode="never">
 
-        <TextView
-            android:id="@+id/tvStats"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Loading..."
-            android:textSize="14sp"/>
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Loading..."
+                android:textColor="#2E7D32"
+                android:textSize="18sp"
+                android:layout_marginBottom="24dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnStats"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="View Detailed Stats"
+                app:backgroundTint="#388E3C"
+                android:textColor="#FFFFFF" />
+
+        </LinearLayout>
 
     </ScrollView>
 
