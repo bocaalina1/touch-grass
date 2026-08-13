@@ -1,5 +1,6 @@
 package com.example.digitalwellbeing
 
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.LinearLayout
@@ -20,8 +21,9 @@ class BlockerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         val blockedApp = intent.getStringExtra(EXTRA_BLOCKED_APP) ?: "that app"
+        val humanName = getAppLabel(blockedApp)
 
-        setContentView(buildLayout(blockedApp))
+        setContentView(buildLayout(humanName))
 
         // Trap the back button — the user must use the home or recents gesture
         onBackPressedDispatcher.addCallback(this) { /* intentionally empty */ }
@@ -77,6 +79,14 @@ class BlockerActivity : AppCompatActivity() {
         packageName
     }
 
+    private fun getAppLabel(packageName: String): String {
+        return try {
+            val info = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(info).toString()
+        } catch (e: PackageManager.NameNotFoundException) {
+            packageName // fallback to package name if somehow not installed
+        }
+    }
     // -------------------------------------------------------------------------
     // Constants
     // -------------------------------------------------------------------------

@@ -3,8 +3,10 @@ package com.example.digitalwellbeing
 import android.app.*
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.os.IBinder
 import kotlinx.coroutines.*
@@ -12,6 +14,7 @@ import java.util.Calendar
 
 class BlockerService : Service() {
 
+    private var isScreenOn = true
     private val db by lazy { AppDatabase.get(this) }
     private val appLimits = mapOf(
         "com.whatsapp"          to 200L,
@@ -24,14 +27,48 @@ class BlockerService : Service() {
     private var currentForegroundApp: String? = null
     private var sessionStartTime: Long = 0L
 
+    // BroadcastReceiver to detect when the phone screen is turned on or off
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    isScreenOn = false
+                    persistCurrentSession() // Instantly save their time when they lock the phone
+                    currentForegroundApp = null // Clear the active app
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    isScreenOn = true
+                }
+            }
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Register the screen state listener when the service is created
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, buildNotification())
-        resetDailyUsageIfNewDay()
+        val dayRolledOver = resetDailyUsageIfNewDay()
+        if(dayRolledOver)
+        {
+            currentForegroundApp = null
+            sessionStartTime = 0L
+        }
         sendUsageFromSystemIfEmpty()
 
         serviceScope.launch {
             while (isActive) {
-                checkAndBlock()
+                // OPTIMIZATION: Only run the heavy blocking logic if the screen is awake!
+                if (isScreenOn) {
+                    checkAndBlock()
+                }
                 delay(POLL_INTERVAL_MS)
             }
         }
@@ -41,13 +78,21 @@ class BlockerService : Service() {
     override fun onDestroy() {
         persistCurrentSession()
         serviceScope.cancel()
+        // Clean up the receiver to prevent memory leaks
+        unregisterReceiver(screenReceiver)
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun checkAndBlock() {
-        resetDailyUsageIfNewDay()
+        val dayRolledOver = resetDailyUsageIfNewDay()
+        if (dayRolledOver)
+        {
+            currentForegroundApp = null
+            sessionStartTime = 0L
+            return
+        }
         val detectedApp = getForegroundApp()
 
         if (detectedApp != currentForegroundApp) {
@@ -111,7 +156,7 @@ class BlockerService : Service() {
     private fun getSavedUsageSeconds(packageName: String): Long =
         usagePrefs().getLong(packageName, 0L)
 
-    private fun resetDailyUsageIfNewDay() {
+    private fun resetDailyUsageIfNewDay():Boolean {
         val prefs = usagePrefs()
         val lastReset = prefs.getLong(KEY_LAST_RESET, 0L)
         val todayMidnight = Calendar.getInstance().apply {
@@ -125,11 +170,13 @@ class BlockerService : Service() {
             prefs.edit()
                 .clear()
                 .putLong(KEY_LAST_RESET, System.currentTimeMillis())
+                // NOTE: do NOT set "seeded"=true here, so sendUsageFromSystemIfEmpty()
+                // will call seedFromSystem() on the next onStartCommand — by which point
+                // the system's UsageStats will have rolled over to the new day correctly.
                 .apply()
-
-            // Re-seed immediately after clearing, since it's a new day anyway
-            seedFromSystem()
+            return true
         }
+        return false
     }
 
     private fun sendUsageFromSystemIfEmpty() {
@@ -168,17 +215,12 @@ class BlockerService : Service() {
                 }
             }
 
-        // Save the summed totals to SharedPreferences
+        // Save the summed totals to SharedPreferences only (NOT Room).
+        // Room is for sessions your service actually tracked — seeded data would
+        // corrupt the StatsActivity charts with double-counted historical usage.
         val editor = prefs.edit()
         totals.forEach { (pkg, seconds) ->
             editor.putLong(pkg, seconds)
-            serviceScope.launch {
-                db.sessionDao().insert(AppSession(
-                    packageName = pkg,
-                    durationSeconds = seconds,
-                    timestamp = System.currentTimeMillis()
-                ))
-            }
             android.util.Log.d(TAG, "Seeded $pkg: ${seconds / 60}m ${seconds % 60}s")
         }
 
@@ -192,7 +234,10 @@ class BlockerService : Service() {
     private fun getForegroundApp(): String? {
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        val events = usm.queryEvents(now - 60 * 60 * 1000L, now)
+
+        // OPTIMIZATION: Only look back 10 seconds to save battery
+        val events = usm.queryEvents(now - 10 * 1000L, now)
+
         val event = UsageEvents.Event()
         var lastApp: String? = null
 
@@ -215,7 +260,7 @@ class BlockerService : Service() {
             .setContentTitle("Touch Grass")
             .setContentText("Go outside 🌿")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setColorized(true)
+            .setColor(android.graphics.Color.parseColor("#388E3C"))
             .build()
     }
 
